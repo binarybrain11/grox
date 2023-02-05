@@ -5,13 +5,11 @@
 #   left, right, normal, inverted: absolute movement
 
 # devices to manipulate
-# If you don't have one of the input devices listed, just leave it blank
 $screen = 'eDP1'
-$touchscreen = 'Wacom HID 5196 Finger'
-$pen = 'Wacom HID 5196 Pen Pen (0xae4d0b0a)'
-$eraser = 'Wacom HID 5196 Pen Eraser (0xae4d0b0a)'
-$touchpad = 'SYNA2B31:00 06CB:CD3E Touchpad'
-$keyboard = 'AT Translated Set 2 keyboard'
+
+# runs cmd and greps output to find input devices that need rotating
+$deviceCmd = 'xinput --list'
+$deviceRE = /id=([\d]*)\s+\[slave\s+pointer/
 
 # disable keypad and touchpad on all but normal orientation
 $controlKeys = false
@@ -36,22 +34,24 @@ def main()
     doOrientate(getNewOrientation(direction))
 end
 
-
 def orientateCmd(orientation, transform)
-    rotateScreen = "xrandr --output #{$screen}" +
-                         " --rotate #{orientation}";
-    rotateTouchscreen = "xinput --set-prop '#{$touchscreen}'" +
-                              " --type=float" +
-                              " 'Coordinate Transformation Matrix'" +
-                              " #{transform}"
-    rotatePen = "xinput --set-prop '#{$pen}'" +
-                              " --type=float" +
-                              " 'Coordinate Transformation Matrix'" +
-                              " #{transform}"
-    rotateEraser = "xinput --set-prop '#{$eraser}'" +
-                              " --type=float" +
-                              " 'Coordinate Transformation Matrix'" +
-                              " #{transform}"
+    screenCmd = "xrandr --output #{$screen}" +
+                         " --rotate #{orientation}" + 
+                         ";"
+
+    # Get a list of devices that need to have an input transform applied
+    devices = `#{$deviceCmd}`.scan($deviceRE).flatten
+
+    inputDeviceCmd = ""
+    devices.each do |device| 
+        
+        inputDeviceCmd += "xinput --set-prop '#{device}'" +
+                                " --type=float" +
+                                " 'Coordinate Transformation Matrix'" +
+                                " #{transform}" + 
+                                ";"
+    end
+
     controlKeys = ""
     if $controlKeys
         setCmd = orientation == 'normal' ? 'xinput --enable ' 
@@ -59,13 +59,11 @@ def orientateCmd(orientation, transform)
         controlKeys = "#{setCmd} '#{$touchpad}'; #{setCmd} '#{$keyboard}';"
     end
 
-    return controlKeys +
-           rotateScreen + ';' +
-           rotateTouchscreen + ';' + 
-           rotatePen + ';' + 
-           rotateEraser + ';'
-end
+    return controlKeys + 
+           screenCmd + 
+           inputDeviceCmd
 
+end
 
 def doOrientate(orientation)
     case orientation
